@@ -1,11 +1,11 @@
 output "endpoint" {
-    description = "RDS connection endpoint including the port."
-    value = aws_db_instance.wordpress-aws-db.endpoint
+  description = "RDS endpoint in hostname:port format."
+  value       = aws_db_instance.wordpress.endpoint
 }
 
-output "address"{
-    description = "RDS hostname without the port"
-    value = aws_db_instance.wordpress-aws-db.address
+output "address" {
+  description = "DNS hostname of the RDS instance."
+  value       = aws_db_instance.wordpress.address
 }
 
 output "port" {
