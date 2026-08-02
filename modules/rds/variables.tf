@@ -1,16 +1,16 @@
 variable "name_prefix" {
-    description = "Prefix that is used for resource names."
-    type = string
+  description = "Prefix that is used for resource names."
+  type        = string
 }
 
 variable "db_subnet_ids" {
-    description = "Private subnet IDs in two distinct AZs"
-    type = list(string)
+  description = "Private subnet IDs in two distinct AZs"
+  type        = list(string)
 
-    validation {
-        condition = length(var.db_subnet_ids) >= 2
-        error_message = "RDS(MySQL) requires subnets in at least two AZs."
-    }
+  validation {
+    condition     = length(var.db_subnet_ids) >= 2
+    error_message = "RDS(MySQL) requires subnets in at least two AZs."
+  }
 }
 
 variable "rds_security_group_id" {

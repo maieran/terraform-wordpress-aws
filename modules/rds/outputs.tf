@@ -9,8 +9,8 @@ output "address" {
 }
 
 output "port" {
-    description = "RDS MySQL port."
-    value = aws_db_instance.wordpress_aws_db.port
+  description = "RDS MySQL port."
+  value       = aws_db_instance.wordpress_aws_db.port
 }
 
 output "db_instance_id" {

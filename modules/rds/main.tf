@@ -24,12 +24,12 @@ resource "aws_db_instance" "wordpress_aws_db" {
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-mysql-rds"
-  }) 
+  })
 }
 
 resource "aws_db_subnet_group" "wordpress" {
-    name = "${var.name_prefix}-db-subnets"
-    subnet_ids = var.db_subnet_ids
+  name       = "${var.name_prefix}-db-subnets"
+  subnet_ids = var.db_subnet_ids
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-db-subnets"
