@@ -75,6 +75,7 @@ module "ebs" {
   # Referencing the EC2 ID ensures EC2 exists before attachment.
   instance_id = module.ec2.instance_id
   
+  # The 10 GiB is required for the volume attached to the EC2 instance
   volume_size       = 10
   device_name       = "/dev/sdf"
 

@@ -14,7 +14,7 @@ output "ec2_instance_id" {
 }
 
 output "selected_ami_id" {
-  description = "Most recent matching Amazon Linux 2023 AMI selected automatically."
+  description = "Most recent matching Amazon Linux 2 AMI selected automatically."
   value       = module.ec2.ami_id
 }
 
