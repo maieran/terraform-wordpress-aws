@@ -1,13 +1,12 @@
-# Data Source aws_ami to select dynamically the most recent AMI available in the EU-West-3 region
-data "aws_ami" "al2023_ami_2023" {
+# Find the newest dynamically the most recent AMI available in the EU-West-3 region
+data "aws_ami" "amazon_linux_2" {
     most_recent = true
     owners = ["amazon"]
 
-    // See https://docs.aws.amazon.com/linux/al2023/ug/ec2.html
     # - x86_64 architecture, compatible with t3.micro
     filter {
       name   = "name"
-      values = ["al2023-ami-2023.*-kernel-6.1-x86_64"]
+      values = ["amzn2-ami-hvm-2.0.*-x86_64-gp2"]
     }
 
     # Explicitly prevent selection of an ARM-based AMI.
@@ -30,7 +29,7 @@ data "aws_ami" "al2023_ami_2023" {
 
 # Create the public EC2 instance on which WordPress will run.
 resource "aws_instance" "ec2_public" {
-  ami                         = data.aws_ami.al2023_ami_2023.id
+  ami                         = data.aws_ami.amazon_linux_2.id
   instance_type               = var.instance_type
 
   # Assign a public IPv4 address so WordPress can be reached
@@ -38,10 +37,8 @@ resource "aws_instance" "ec2_public" {
   associate_public_ip_address = true
 
   
-  # Place EC2 in the public subnet created by the networking module
-  # The subnet already determines the Availability Zone, hence we comment out the availability zone
+  # Place EC2 in the public subnet created by the networking module, it determines the AZ automatically
   subnet_id = var.subnet_id   
-  //availability_zone           = var.availability_zone
 
   # Attach the security group that allows HTTP and optional HTTPS
   # This argument expects a list, even though we attach only one group

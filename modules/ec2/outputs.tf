@@ -15,5 +15,5 @@ output "availability_zone" {
 
 output "ami_id" {
   description = "AMI selected dynamically for the EC2 instance."
-  value       = aws_ami.al2023_ami_2023.id
+  value       = aws_ami.amazon_linux_2.id
 }

@@ -13,11 +13,6 @@ variable "security_group_id" {
   type        = string
 }
 
-/*
-variable "availability_zone" {
-  description = "Required Availability Zone for the instance."
-  type        = string
-} */
 
 variable "instance_type" {
   description = "EC2 instance type."
