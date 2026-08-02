@@ -1,0 +1,306 @@
+#!/bin/bash
+set -Eeuo pipefail
+
+
+# Send bootstrap output to a persistent log file.
+# Do not enable "set -x", because this script handles a database password.
+exec > >(tee -a /var/log/install-wordpress.log) 2>&1
+
+trap 'echo "ERROR: WordPress installation failed at line $LINENO."' ERR
+
+# Variables proccessed by Terraform's templatefile() function
+DB_HOST="${db_host}"
+DB_NAME="${db_name}"
+DB_USER="${db_username}"
+DB_PASSWORD_BASE64="${db_password_base64}"
+ENABLE_HTTPS="${enable_https}"
+
+WORDPRESS_DIR="/var/www/html"
+
+echo "Starting WordPress installation."
+
+
+
+# Update the system
+yum update -y
+
+
+# Install expect package
+yum install expect -y
+
+
+# Enable the PHP 8.2 repository provided by Amazon Linux Extras.
+# By default, Amazon Linux 2 may install an older PHP version.
+# Refresh the YUM metadata so the package manager can see the newly enabled repository.
+#PHP_REPO=$(amazon-linux-extras list | awk '/php8/ {print $1}' | tail -1)
+amazon-linux-extras install -y php8.2
+#amazon-linux-extras enable "$PHP_REPO"
+#yum clean metadata
+
+
+# Install Apache HTTP server, required PHP modules and MariaDB
+yum install -y \
+  httpd \
+  wget \
+  tar \
+  curl \
+  openssl \
+  e2fsprogs \
+  php \
+  php-fpm \
+  php-bcmath \
+  php-gd \
+  php-intl \
+  php-mbstring \
+  php-mysqlnd \
+  php-xml \
+  mariadb
+
+####################################
+# Wait for the additional EBS volume
+####################################
+mkdir -p "$WORDPRESS_DIR"
+
+
+ROOT_SOURCE=$(readlink -f "$(findmnt -n -o SOURCE /)")
+ROOT_PARENT=$(lsblk -no PKNAME "$ROOT_SOURCE" | head -n 1)
+
+if [ -n "$ROOT_PARENT"]; then
+  ROOT_DISK="/dev/$ROOT_PARENT"
+else
+  ROOT_DISK="$ROOT_SOURCE"
+fi
+
+DATA_DEVICE=""
+
+for ATTEMPT in $(seq 1 120); do
+  while read -r DEVICE DEVICE_TYPE; do
+    if [ "$DEVICE_TYPE" = "disk" ] && [ "$DEVICE" != "$ROOT_DISK" ]; then
+      DATA_DEVICE="$DEVICE"
+      break
+    fi
+  done < <(lsblk -dpno NAME,TYPE)
+
+  if [ -n "$DATA_DEVICE" ]; then
+    break
+  fi
+
+  echo "Waiting for EBS volume: attempt $ATTEMPT/120"
+  sleep 5
+done
+
+if [ -z "$DATA_DEVICE" ]; then
+  echo "ERROR: Additional EBS volume was not detected."
+  exit 1
+fi
+
+echo "Additional EBS volume detected: $DATA_DEVICE"
+
+################################
+#Format and mount the EBS volume
+################################
+
+FILESYSTEM_TYPE=$(blkid -s TYPE -o value "$DATA_DEVICE" 2>/dev/null || true)
+
+if [ -z "$FILESYSTEM_TYPE" ]; then
+  echo "Creating an ext4 filesystem on $DATA_DEVICE."
+  mkfs.ext4 -F "$DATA_DEVICE"
+  FILESYSTEM_TYPE="ext4"
+else
+  echo "Existing $FILESYSTEM_TYPE filesystem found; formatting skipped."
+fi
+
+FILESYSTEM_UUID=$(blkid -s UUID -o value "$DATA_DEVICE")
+
+if ! grep -q "UUID=$FILESYSTEM_UUID " /etc/fstab; then
+  echo "UUID=$FILESYSTEM_UUID $WORDPRESS_DIR $FILESYSTEM_TYPE defaults,nofail 0 2" \
+    >> /etc/fstab
+fi
+
+if ! mountpoint -q "$WORDPRESS_DIR"; then
+  mount "$WORDPRESS_DIR"
+fi
+
+echo "EBS volume mounted at $WORDPRESS_DIR."
+
+
+####################
+# Download WordPress
+####################
+
+if [ ! -f "$WORDPRESS_DIR/wp-settings.php" ]; then
+  TEMP_DIR=$(mktemp -d)
+
+  wget -q https://wordpress.org/latest.tar.gz \
+    -O "$TEMP_DIR/wordpress.tar.gz"
+
+  tar -xzf "$TEMP_DIR/wordpress.tar.gz" -C "$TEMP_DIR"
+  cp -a "$TEMP_DIR/wordpress/." "$WORDPRESS_DIR/"
+
+  rm -rf "$TEMP_DIR"
+
+  echo "WordPress downloaded successfully."
+else
+  echo "Existing WordPress installation found; download skipped."
+fi
+
+##############################
+# Verify the connection to RDS
+##############################
+
+DB_PASSWORD=$(printf '%s' "$DB_PASSWORD_BASE64" | base64 --decode)
+RDS_AVAILABLE="false"
+
+for ATTEMPT in $(seq 1 60); do
+  if MYSQL_PWD="$DB_PASSWORD" mysql \
+      --connect-timeout=5 \
+      --host="$DB_HOST" \
+      --user="$DB_USER" \
+      "$DB_NAME" \
+      --execute="SELECT 1;" >/dev/null 2>&1; then
+
+    RDS_AVAILABLE="true"
+    break
+  fi
+
+  echo "Waiting for RDS: attempt $ATTEMPT/60"
+  sleep 10
+done
+
+unset DB_PASSWORD
+
+if [ "$RDS_AVAILABLE" != "true" ]; then
+  echo "ERROR: EC2 could not connect to RDS."
+  exit 1
+fi
+
+echo "RDS connection verified successfully."
+
+########################
+# Create wp-config.php
+########################
+
+cat > "$WORDPRESS_DIR/wp-config.php" <<'PHP_CONFIG'
+<?php
+
+define( 'DB_NAME', '${db_name}' );
+define( 'DB_USER', '${db_username}' );
+define( 'DB_PASSWORD', base64_decode('${db_password_base64}') );
+define( 'DB_HOST', '${db_host}' );
+
+define( 'DB_CHARSET', 'utf8mb4' );
+define( 'DB_COLLATE', '' );
+
+PHP_CONFIG
+
+# Generate WordPress authentication keys and salts.
+for KEY_NAME in \
+  AUTH_KEY \
+  SECURE_AUTH_KEY \
+  LOGGED_IN_KEY \
+  NONCE_KEY \
+  AUTH_SALT \
+  SECURE_AUTH_SALT \
+  LOGGED_IN_SALT \
+  NONCE_SALT
+do
+  KEY_VALUE=$(openssl rand -base64 48 | tr -d '\n')
+
+  printf "define( '%s', '%s' );\n" \
+    "$KEY_NAME" \
+    "$KEY_VALUE" \
+    >> "$WORDPRESS_DIR/wp-config.php"
+done
+
+cat >> "$WORDPRESS_DIR/wp-config.php" <<'PHP_CONFIG'
+
+$table_prefix = 'wp_';
+
+define( 'WP_DEBUG', false );
+define( 'DISALLOW_FILE_EDIT', true );
+
+if ( ! defined( 'ABSPATH' ) ) {
+    define( 'ABSPATH', __DIR__ . '/' );
+}
+
+require_once ABSPATH . 'wp-settings.php';
+PHP_CONFIG
+
+
+################################
+# Configure Apache for WordPress
+################################
+
+cat > /etc/httpd/conf.d/wordpress.conf <<'APACHE_CONFIG'
+<Directory "/var/www/html">
+    AllowOverride All
+    Options FollowSymLinks
+    Require all granted
+</Directory>
+APACHE_CONFIG
+
+
+
+#################################
+# Configure WordPress permissions
+#################################
+
+chown -R apache:apache "$WORDPRESS_DIR"
+
+find "$WORDPRESS_DIR" -type d -exec chmod 755 {} \;
+find "$WORDPRESS_DIR" -type f -exec chmod 644 {} \;
+
+chmod 640 "$WORDPRESS_DIR/wp-config.php"
+
+
+############################
+# Optional self-signed HTTPS
+############################
+
+if [ "$ENABLE_HTTPS" = "true" ]; then
+  yum install -y mod_ssl
+
+  TLS_PRIVATE_KEY="/etc/pki/tls/private/wordpress-selfsigned.key"
+  TLS_CERTIFICATE="/etc/pki/tls/certs/wordpress-selfsigned.crt"
+
+  if [ ! -f "$TLS_PRIVATE_KEY" ] || [ ! -f "$TLS_CERTIFICATE" ]; then
+    openssl req \
+      -x509 \
+      -nodes \
+      -days 365 \
+      -newkey rsa:2048 \
+      -keyout "$TLS_PRIVATE_KEY" \
+      -out "$TLS_CERTIFICATE" \
+      -subj "/CN=$(hostname -f)"
+  fi
+
+  chmod 600 "$TLS_PRIVATE_KEY"
+
+  sed -i -E \
+    "s|^[[:space:]]*SSLCertificateFile[[:space:]].*|SSLCertificateFile $TLS_CERTIFICATE|" \
+    /etc/httpd/conf.d/ssl.conf
+
+  sed -i -E \
+    "s|^[[:space:]]*SSLCertificateKeyFile[[:space:]].*|SSLCertificateKeyFile $TLS_PRIVATE_KEY|" \
+    /etc/httpd/conf.d/ssl.conf
+
+  echo "Self-signed HTTPS configured."
+fi
+
+
+
+####################
+# Start the services
+####################
+systemctl enable php-fpm
+systemctl enable httpd
+
+systemctl restart php-fpm
+systemctl restart httpd
+
+
+# Final result
+echo "************************************************************************"
+echo "WordPress server installation completed successfully."
+echo "Open the EC2 public IP address to finish the WordPress admin setup."
+echo "************************************************************************"
