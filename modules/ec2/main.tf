@@ -1,44 +1,44 @@
 # Find the newest dynamically the most recent AMI available in the EU-West-3 region
 data "aws_ami" "amazon_linux_2" {
-    most_recent = true
-    owners = ["amazon"]
+  most_recent = true
+  owners      = ["amazon"]
 
-    # - x86_64 architecture, compatible with t3.micro
-    filter {
-      name   = "name"
-      values = ["amzn2-ami-hvm-2.0.*-x86_64-gp2"]
-    }
+  # - x86_64 architecture, compatible with t3.micro
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-2.0.*-x86_64-gp2"]
+  }
 
-    # Explicitly prevent selection of an ARM-based AMI.
-    filter {
-      name   = "architecture"
-      values = ["x86_64"]
-    }
+  # Explicitly prevent selection of an ARM-based AMI.
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
 
-    # Select an EBS-backed AMI using hardware-assisted virtualization.
-    filter {
-      name   = "virtualization-type"
-      values = ["hvm"]
-    }
+  # Select an EBS-backed AMI using hardware-assisted virtualization.
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 
-    filter {
-      name   = "root-device-type"
-      values = ["ebs"]
-    }
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
 }
 
 # Create the public EC2 instance on which WordPress will run.
 resource "aws_instance" "ec2_public" {
-  ami                         = data.aws_ami.amazon_linux_2.id
-  instance_type               = var.instance_type
+  ami           = data.aws_ami.amazon_linux_2.id
+  instance_type = var.instance_type
 
   # Assign a public IPv4 address so WordPress can be reached
   # from the internet through the web security group.
   associate_public_ip_address = true
 
-  
+
   # Place EC2 in the public subnet created by the networking module, it determines the AZ automatically
-  subnet_id = var.subnet_id   
+  subnet_id = var.subnet_id
 
   # Attach the security group that allows HTTP and optional HTTPS
   # This argument expects a list, even though we attach only one group
