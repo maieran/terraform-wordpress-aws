@@ -1,4 +1,4 @@
-resource "aws_db_instance" "wordpress-aws-db" {
+resource "aws_db_instance" "wordpress_aws_db" {
   identifier = "${var.name_prefix}-mysql-rds"
 
   engine         = "mysql"
