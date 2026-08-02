@@ -1,3 +1,8 @@
+output "wordpress_public_ip" {
+  description = "Public IP address of the WordPress server."
+  value       = module.ec2.public_ip
+}
+
 output "wordpress_http_url" {
   description = "HTTP address of the WordPress website."
   value       = "http://${module.ec2.public_ip}"

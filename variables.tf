@@ -37,7 +37,7 @@ variable "private_db_subnet_cidrs" {
 variable "enable_https" {
   description = "Whether port 443 should be opened."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "ec2_instance_type" {
@@ -65,9 +65,19 @@ variable "database_username" {
 }
 
 variable "database_password" {
-  description = "Master password for the WordPress database."
+  description = "Master password for the WordPress RDS database."
   type        = string
   sensitive   = true
+
+  validation {
+    condition = (
+      length(var.database_password) >= 8 &&
+      length(var.database_password) <= 41 &&
+      !can(regex("[/\"'@ ]", var.database_password))
+    )
+
+    error_message = "The MySQL password must contain 8–41 characters and cannot contain /, single quote, double quote, @, or spaces."
+  }
 }
 
 variable "tags" {
