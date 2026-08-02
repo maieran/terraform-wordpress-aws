@@ -1,11 +1,11 @@
 variable "name_prefix" {
-    description = "Prefix used for resources names."
-    type = string
+  description = "Prefix used for resources names."
+  type        = string
 }
 
 variable "vpc_cidr" {
   description = "CIDR block of the VPC."
-  type        = string    
+  type        = string
 }
 
 variable "public_subnet_cidr" {
