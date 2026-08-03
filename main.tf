@@ -42,6 +42,8 @@ module "ec2" {
   security_group_id = module.networking.web_security_group_id
   instance_type     = var.ec2_instance_type
 
+  instance_name = "${var.environment}-devops-${var.owner_name}"
+  owner_name    = var.owner_name
 
 
   # Terraform renders the installation script with the RDS connection values.

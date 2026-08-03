@@ -11,7 +11,10 @@ resource "aws_db_instance" "wordpress_aws_db" {
 
   allocated_storage = 20
   storage_type      = "gp3"
-  storage_encrypted = true
+  # RDS storage encryption is temporarily disabled because the restricted
+  # training AWS role has no permission to access an RDS KMS key.
+  # Changing this to true when the required KMS permissions are available.
+  storage_encrypted = false
 
   publicly_accessible = false
   multi_az            = true

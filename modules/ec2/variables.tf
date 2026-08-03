@@ -31,3 +31,13 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "instance_name" {
+  description = "Name displayed for the EC2 instance."
+  type        = string
+}
+
+variable "owner_name" {
+  description = "Name of the infrastructure owner."
+  type        = string
+}

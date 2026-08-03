@@ -61,19 +61,23 @@ resource "aws_instance" "ec2_public" {
   # Configure the EC2 operating-system/root disk
   # This is separate from the additional 10-GiB WordPress EBS volume
   root_block_device {
-    encrypted   = true
+    # Encryption is temporarily disabled because the restricted training AWS
+    # role cannot access the configured KMS key. Enable it when KMS access exists.
+    encrypted   = false
     volume_size = 8
     volume_type = "gp3"
   }
 
   # Tags applied directly to the EC2 instance.
   tags = merge(var.tags, {
-    Name = "${var.name_prefix}-web"
+    Name  = "${var.name_prefix}-web"
+    Owner = var.owner_name
   })
 
   # Tags applied to the root EBS volume created with the instance.
   volume_tags = merge(var.tags, {
-    Name = "${var.name_prefix}-root"
+    Name  = "${var.instance_name}-root"
+    Owner = var.owner_name
   })
 }
 

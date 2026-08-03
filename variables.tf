@@ -85,3 +85,9 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "owner_name" {
+  description = "Name of the infrastructure owner."
+  type        = string
+  default     = "Andre"
+}

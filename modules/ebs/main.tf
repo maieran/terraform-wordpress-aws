@@ -3,7 +3,10 @@ resource "aws_ebs_volume" "wordpress_data" {
   availability_zone = var.availability_zone
   size              = var.volume_size
   type              = "gp3"
-  encrypted         = true
+
+  # Encryption is temporarily disabled because the restricted training AWS
+  # role cannot access the configured KMS key. Enable it when KMS access exists.
+  encrypted = false
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-wordpress-data"
