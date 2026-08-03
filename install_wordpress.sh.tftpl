@@ -62,20 +62,26 @@ yum install -y \
 mkdir -p "$WORDPRESS_DIR"
 
 
-ROOT_SOURCE=$(readlink -f "$(findmnt -n -o SOURCE /)")
-ROOT_PARENT=$(lsblk -no PKNAME "$ROOT_SOURCE" | head -n 1)
+ROOT_SOURCE="$(readlink -f "$(findmnt -n -o SOURCE /)")"
+ROOT_PARENT="$(lsblk -no PKNAME "$ROOT_SOURCE" | head -n 1 || true)"
 
-if [ -n "$ROOT_PARENT"]; then
+if [ -n "$ROOT_PARENT" ]; then
   ROOT_DISK="/dev/$ROOT_PARENT"
 else
   ROOT_DISK="$ROOT_SOURCE"
 fi
 
+echo "Root filesystem: $ROOT_SOURCE"
+echo "Root disk: $ROOT_DISK"
+
 DATA_DEVICE=""
 
 for ATTEMPT in $(seq 1 120); do
   while read -r DEVICE DEVICE_TYPE; do
-    if [ "$DEVICE_TYPE" = "disk" ] && [ "$DEVICE" != "$ROOT_DISK" ]; then
+    if [ "$DEVICE_TYPE" = "disk" ] &&
+       [ "$DEVICE" != "$ROOT_DISK" ] &&
+       ! lsblk -nrpo MOUNTPOINT "$DEVICE" | grep -q '^/'; then
+
       DATA_DEVICE="$DEVICE"
       break
     fi
